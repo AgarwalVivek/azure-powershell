@@ -18,12 +18,7 @@ param(
 )
 
 function Get-PreloadAssemblies{
-    param(
-        [Parameter(Mandatory)]
-        [string] $BuildFolder,
-        [Parameter(Mandatory=$True)]
-        [string] $ModuleFolder
-    )
+C
     Write-Host "Getting preload assemblies in $BuildFolder for $ModuleFolder"
     Add-Type -Path ([System.IO.Path]::Combine($BuildFolder, "Az.Accounts", "Microsoft.Azure.PowerShell.AssemblyLoading.dll"))
     $assemblyRootPath = [System.IO.Path]::Combine($BuildFolder, "Az.Accounts", "lib")

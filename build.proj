@@ -36,6 +36,7 @@
     <TestFramework Condition="'$(TestFramework)' == ''">netcoreapp2.2</TestFramework>
     <IsGenerateBased Condition="'$(IsGenerateBased)' != 'true'">false</IsGenerateBased>
     <IsSecurityCheck Condition="'$(IsSecurityCheck)' != 'true'">false</IsSecurityCheck>
+    <CheckChangeLog Condition="'$(CheckChangeLog)' != 'true'">false</CheckChangeLog>
 
     <!-- Flags -->
     <CodeSign Condition ="'$(CodeSign)' == ''">false</CodeSign>
@@ -157,7 +158,7 @@
   </Target>
 
   <Target Name="BuildNormalModules">
-    <ItemGroup Condition="$(PullRequestNumber) == '' AND $(TargetModule) == ''">
+    <ItemGroup Condition="$(PullRequestNumber) == '' AND $(TargetModule) == '' AND $(CheckChangeLog) == ''">
       <CsprojFiles Include="$(RepoRoot)src/**/*.csproj" Exclude="$(RepoRoot)src/**/*.Test.csproj;$(RepoRoot)src/**/Authenticators.csproj" />
       <CsprojFiles Include="$(RepoRoot)src/**/*.Test.csproj" Exclude="$(Net472TestExclude)" Condition="'$(Configuration)' != 'Release' and '$(TestsToRun)' == 'All'" />
       <CsprojFiles Include="$(RepoRoot)src/**/*.Test.csproj" Exclude="$(CoreTests)$(Net472TestExclude)" Condition="'$(Configuration)' != 'Release' and '$(TestsToRun)' == 'NonCore'" />
@@ -174,6 +175,18 @@
       <CsprojFiles Include="@(BuildCsprojList)" />
       <CsprojFiles Include="@(TestCsprojList)" Condition="'$(Configuration)' != 'Release'" />
     </ItemGroup>
+    <Exec Command="$(PowerShellCoreCommandPrefix) &quot;.\tools\CheckChangelogs.ps1 -outputFile $(RepoArtifacts)/ChangedModule.txt -rootPath $(RepoRoot)src/ &quot;" Condition="$(CheckChangeLog) != ''"/>
+    <ReadLinesFromFile File="$(RepoArtifacts)/ChangedModule.txt" Condition="$(CheckChangeLog) != ''">
+        <Output TaskParameter="Lines" ItemName="ChangedModuleList" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="$(CheckChangeLog) != '' AND '@(ChangedModuleList)' != ''">
+      <!-- Add changed projects only if CheckChangeLog is true -->
+      <CsprojFiles Include="$(RepoRoot)src/%(ChangedModuleList.Identity)/**/*.csproj" Exclude="$(RepoRoot)src/**/*.Test.csproj;$(RepoRoot)src/**/Authenticators.csproj" />
+    </ItemGroup>
+    <WriteLinesToFile
+      File="output3.txt"
+      Lines="@(CsprojFiles)"
+      Overwrite="true" />
     <!-- https://github.com/dotnet/cli/issues/6295#issuecomment-346973582 -->
     <Exec Command="dotnet sln $(RepoArtifacts)Azure.PowerShell.sln add &quot;%(CsprojFiles.FullPath)&quot;" Condition="'@(CsprojFiles)' != ''" />
     <PropertyGroup>
@@ -205,6 +218,10 @@
     <Exec Command="$(PowerShellCoreCommandPrefix) &quot;$(RepoTools)CheckPoliCheck.ps1 -BuildConfig $(Configuration) -CIToolsPath $(CIToolsPath)&quot;" />
     <Exec Command="$(PowerShellCoreCommandPrefix) &quot;$(RepoTools)CheckCredScan.ps1 -CIToolsPath $(CIToolsPath) -PullRequestNumber $(PullRequestNumber)&quot;" />
     <OnError ExecuteTargets="OnPremChecksErrorMessage" />
+  </Target>
+
+  <Target Name="WriteItemGroupToFile">
+
   </Target>
 
   <Target Name="OnPremChecksErrorMessage">
@@ -262,10 +279,6 @@
 
   <Target Name="AzToolsPredictor">
     <Exec Command='dotnet msbuild $(RepoTools)/Az.Tools.Predictor/build.proj /t:"clean;build;test"' />
-  </Target>
-
-  <Target Name="ChangeLogErrorMessage">
-    <Error Text="Modified files were found with no update to their change log. Please add a snippet to the affected modules' change log." />
   </Target>
 
   <Target Name="Publish" Condition="'$(Configuration)' == 'Release'">
